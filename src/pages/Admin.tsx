@@ -1,37 +1,31 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  Trash2, Users, Key, Eye, EyeOff, Search, AlertCircle, ArrowDownRight, 
-  ArrowUpRight, Loader2, CheckCircle, Clock, UserPlus, Menu, X
+import React, { useState } from 'react';
+import {
+  Trash2, Users, Key, Eye, EyeOff, Search, AlertCircle,
+  Loader2, CheckCircle, UserPlus, Menu, X
 } from 'lucide-react';
-import { makeApiRequest } from '../utils/api';
+import { axiosInstance } from '../utils/axiosInstance';
+import { AdminSkeleton } from '../components/skeletons/AdminSkeleton';
 
 interface User {
   username: string;
-  password: string;
+  role: string;
 }
 
 interface PasswordChangeForm {
+  adminUsername: string;
+  adminPassword: string;
   username: string;
   newPassword: string;
   confirmPassword: string;
 }
 
-interface Transaction {
-  operation_type: string;
-  transaction_id: string;
-  date: string;
-  details: {
-    item_id: string;
-    username: string;
-    [key: string]: any;
-  };
-  timestamp: string;
-}
+
 
 interface CreateUserForm {
   username: string;
   password: string;
   confirmPassword: string;
+  role: string;
 }
 
 const Admin = () => {
@@ -42,6 +36,8 @@ const Admin = () => {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [passwordForm, setPasswordForm] = useState<PasswordChangeForm>({
+    adminUsername: '',
+    adminPassword: '',
     username: '',
     newPassword: '',
     confirmPassword: ''
@@ -49,26 +45,27 @@ const Admin = () => {
   const [createUserForm, setCreateUserForm] = useState<CreateUserForm>({
     username: '',
     password: '',
-    confirmPassword: ''
+    confirmPassword: '',
+    role: 'user'
   });
   const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [showAdminPassword, setShowAdminPassword] = useState(false);
   const [isCreatingUser, setIsCreatingUser] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [showCreatePassword, setShowCreatePassword] = useState(false);
   const [showCreateConfirmPassword, setShowCreateConfirmPassword] = useState(false);
-  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [isLoadingTransactions, setIsLoadingTransactions] = useState(false);
   const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false);
   const [isDeletingTransaction, setIsDeletingTransaction] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [viewUsersAdminUsername, setViewUsersAdminUsername] = useState('');
+  const [viewUsersAdminPassword, setViewUsersAdminPassword] = useState('');
+  const [showViewUsersAdminPassword, setShowViewUsersAdminPassword] = useState(false);
 
   const sections = [
     { id: 'transactions', label: 'Delete Transaction', icon: Trash2 },
     { id: 'users', label: 'View Users', icon: Users },
     { id: 'password', label: 'Change User Password', icon: Key },
-    { id: 'watch', label: 'Watch Transaction', icon: Eye },
     { id: 'create', label: 'Create User', icon: UserPlus }
   ];
 
@@ -76,12 +73,11 @@ const Admin = () => {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await makeApiRequest({
-        operation: "AdminViewUsers",
-        username: "admin",
-        password: "37773"
+      const response = await axiosInstance.post('/api/users/admin/view/', {
+        username: viewUsersAdminUsername,
+        password: viewUsersAdminPassword
       });
-      setUsers(response);
+      setUsers(response.data);
     } catch (error: any) {
       setError(error?.message || 'Failed to fetch users');
       console.error('Error fetching users:', error);
@@ -90,15 +86,16 @@ const Admin = () => {
     }
   };
 
-  useEffect(() => {
-    if (selectedSection === 'users') {
-      fetchUsers();
-    }
-  }, [selectedSection]);
+  const handleViewUsers = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await fetchUsers();
+  };
+
+
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     setError(null);
     setSuccessMessage(null);
 
@@ -115,27 +112,31 @@ const Admin = () => {
     setIsCreatingUser(true);
 
     try {
-      const response = await makeApiRequest({
-        operation: "RegisterUser",
+      const response = await axiosInstance.post('/api/users/register/', {
         username: createUserForm.username,
-        password: createUserForm.password
+        password: createUserForm.password,
+        role: createUserForm.role
       });
 
-      if (response.message === "User registered successfully.") {
-        setSuccessMessage('User registered successfully');
+      if (response.data && response.data.message === "User registered successfully.") {
+        setSuccessMessage(`User '${response.data.username}' registered successfully as ${response.data.role}`);
         setCreateUserForm({
           username: '',
           password: '',
-          confirmPassword: ''
+          confirmPassword: '',
+          role: 'user'
         });
-        await fetchUsers();
-      } else if (response.error === "Username already registered.") {
-        setError('Username already registered');
-      } else {
-        setError('Try again with different Username and Password');
+        // Optionally refresh the users list if admin credentials are available
+        if (viewUsersAdminUsername && viewUsersAdminPassword) {
+          await fetchUsers();
+        }
       }
     } catch (error: any) {
-      setError(error?.message || 'Failed to create user');
+      if (error?.response?.data?.error) {
+        setError(error.response.data.error);
+      } else {
+        setError(error?.message || 'Failed to create user');
+      }
     } finally {
       setIsCreatingUser(false);
     }
@@ -143,7 +144,7 @@ const Admin = () => {
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     setError(null);
     setSuccessMessage(null);
 
@@ -160,49 +161,31 @@ const Admin = () => {
     setIsChangingPassword(true);
 
     try {
-      const response = await makeApiRequest({
-        operation: "AdminUpdateUser",
-        username: "admin",
-        password: "37773",
+      const response = await axiosInstance.post('/api/users/admin/update/', {
+        username: passwordForm.adminUsername,
+        password: passwordForm.adminPassword,
         username_to_update: passwordForm.username,
         new_password: passwordForm.newPassword
       });
 
-      if (response) {
-        setSuccessMessage(`Password successfully updated for user ${passwordForm.username}`);
+      if (response.data && response.data.message) {
+        setSuccessMessage(response.data.message);
         setPasswordForm({
+          adminUsername: '',
+          adminPassword: '',
           username: '',
           newPassword: '',
           confirmPassword: ''
         });
       }
     } catch (error: any) {
-      setError(error?.message || 'Failed to update password');
+      setError(error?.response?.data?.error || error?.message || 'Failed to update password');
     } finally {
       setIsChangingPassword(false);
     }
   };
 
-  const handleWatchTransactions = async () => {
-    setIsLoadingTransactions(true);
-    setError(null);
-    
-    try {
-      const response = await makeApiRequest({
-        operation: "GetAllStockTransactions",
-        username: "admin"
-      });
-      
-      setTransactions(response);
-      setSuccessMessage('Successfully fetched stock transactions');
-    } catch (error: any) {
-      setError(error?.message || 'Failed to fetch transactions');
-      console.error('Error fetching transactions:', error);
-    } finally {
-      setIsLoadingTransactions(false);
-      setShowConfirmDialog(false);
-    }
-  };
+
 
   const handleDeleteTransaction = async () => {
     setIsDeletingTransaction(true);
@@ -210,17 +193,20 @@ const Admin = () => {
     setSuccessMessage(null);
 
     try {
-      const response = await makeApiRequest({
-        operation: "DeleteTransactionData",
+      const response = await axiosInstance.post('/api/undo/admin/delete-transactions/', {
         username: "admin",
-        password: "37773"
+        confirm: "DELETE_ALL_TRANSACTIONS"
       });
 
-      if (response) {
-        setSuccessMessage('Transaction deleted successfully');
+      if (response.data) {
+        setSuccessMessage(response.data.message || 'All transactions deleted successfully');
       }
     } catch (error: any) {
-      setError(error?.message || 'Failed to delete transaction');
+      if (error?.response?.data?.error) {
+        setError(error.response.data.error);
+      } else {
+        setError(error?.message || 'Failed to delete transactions');
+      }
     } finally {
       setIsDeletingTransaction(false);
       setShowDeleteConfirmDialog(false);
@@ -234,10 +220,10 @@ const Admin = () => {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Admin Panel</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Admin Panel</h1>
         <button
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          className="md:hidden p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg"
+          className="md:hidden p-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
         >
           {isMobileMenuOpen ? (
             <X className="h-6 w-6" />
@@ -247,9 +233,9 @@ const Admin = () => {
         </button>
       </div>
 
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 overflow-hidden transition-colors">
         {/* Mobile Navigation */}
-        <div className={`md:hidden ${isMobileMenuOpen ? 'block' : 'hidden'} border-b`}>
+        <div className={`md:hidden ${isMobileMenuOpen ? 'block' : 'hidden'} border-b border-gray-200 dark:border-gray-700`}>
           <div className="p-4 space-y-2">
             {sections.map((section) => (
               <button
@@ -257,12 +243,13 @@ const Admin = () => {
                 onClick={() => {
                   setSelectedSection(section.id);
                   setIsMobileMenuOpen(false);
+                  setError(null);
+                  setSuccessMessage(null);
                 }}
-                className={`w-full flex items-center space-x-2 px-4 py-3 rounded-lg ${
-                  selectedSection === section.id
-                    ? 'bg-indigo-50 text-indigo-600'
-                    : 'text-gray-600 hover:bg-gray-50'
-                }`}
+                className={`w-full flex items-center space-x-2 px-4 py-3 rounded-lg transition-colors ${selectedSection === section.id
+                  ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
+                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                  }`}
               >
                 <section.icon className="h-5 w-5" />
                 <span className="font-medium">{section.label}</span>
@@ -272,16 +259,19 @@ const Admin = () => {
         </div>
 
         {/* Desktop Navigation */}
-        <div className="hidden md:flex border-b">
+        <div className="hidden md:flex border-b border-gray-200 dark:border-gray-700">
           {sections.map((section) => (
             <button
               key={section.id}
-              onClick={() => setSelectedSection(section.id)}
-              className={`flex-1 px-4 py-3 flex items-center justify-center space-x-2 ${
-                selectedSection === section.id
-                  ? 'bg-indigo-50 text-indigo-600 border-b-2 border-indigo-600'
-                  : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-              }`}
+              onClick={() => {
+                setSelectedSection(section.id);
+                setError(null);
+                setSuccessMessage(null);
+              }}
+              className={`flex-1 px-4 py-3 flex items-center justify-center space-x-2 transition-colors ${selectedSection === section.id
+                ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 border-b-2 border-indigo-600 dark:border-indigo-400'
+                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'
+                }`}
             >
               <section.icon className="h-5 w-5" />
               <span className="font-medium hidden lg:inline">{section.label}</span>
@@ -291,33 +281,48 @@ const Admin = () => {
 
         <div className="p-4 sm:p-6">
           {selectedSection === 'transactions' && (
-            <div className="bg-white rounded-lg">
-              <h2 className="text-xl font-semibold mb-4">Delete Transaction</h2>
-              
+            <div className="bg-white dark:bg-gray-800 rounded-lg transition-colors">
+              <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Delete Transaction</h2>
+
               {error && (
-                <div className="mb-4 bg-red-50 border-l-4 border-red-400 p-4">
-                  <div className="flex">
-                    <AlertCircle className="h-5 w-5 text-red-400 mr-2" />
-                    <p className="text-sm text-red-700">{error}</p>
+                <div className="mb-4 bg-red-50 dark:bg-red-900/30 border-l-4 border-red-400 dark:border-red-500 p-4">
+                  <div className="flex items-start justify-between">
+                    <div className="flex">
+                      <AlertCircle className="h-5 w-5 text-red-400 dark:text-red-300 mr-2" />
+                      <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+                    </div>
+                    <button
+                      onClick={() => setError(null)}
+                      className="text-red-400 dark:text-red-300 hover:text-red-600 dark:hover:text-red-200"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
                   </div>
                 </div>
               )}
 
               {successMessage && (
                 <div className="mb-4 bg-green-50 border-l-4 border-green-400 p-4">
-                  <div className="flex">
-                    <CheckCircle className="h-5 w-5 text-green-400 mr-2" />
-                    <p className="text-sm text-green-700">{successMessage}</p>
+                  <div className="flex items-start justify-between">
+                    <div className="flex">
+                      <CheckCircle className="h-5 w-5 text-green-400 mr-2" />
+                      <p className="text-sm text-green-700">{successMessage}</p>
+                    </div>
+                    <button
+                      onClick={() => setSuccessMessage(null)}
+                      className="text-green-400 hover:text-green-600"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
                   </div>
                 </div>
               )}
 
-              <button 
+              <button
                 onClick={() => setShowDeleteConfirmDialog(true)}
                 disabled={isDeletingTransaction}
-                className={`w-full bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 flex items-center justify-center ${
-                  isDeletingTransaction ? 'opacity-75 cursor-not-allowed' : ''
-                }`}
+                className={`w-full bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 flex items-center justify-center ${isDeletingTransaction ? 'opacity-75 cursor-not-allowed' : ''
+                  }`}
               >
                 <Trash2 className="h-5 w-5 mr-2" />
                 Delete Transaction
@@ -325,16 +330,16 @@ const Admin = () => {
 
               {showDeleteConfirmDialog && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                  <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-                    <h3 className="text-lg font-semibold mb-4">Warning</h3>
-                    <p className="text-gray-600 mb-6">
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4 border border-gray-200 dark:border-gray-700 shadow-xl">
+                    <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Warning</h3>
+                    <p className="text-gray-600 dark:text-gray-300 mb-6">
                       Warning: This action cannot be undone. The transaction will be permanently removed from the system.
                       Are you sure you want to delete the transaction?
                     </p>
                     <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-3">
                       <button
                         onClick={() => setShowDeleteConfirmDialog(false)}
-                        className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 w-full sm:w-auto"
+                        className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 w-full sm:w-auto"
                       >
                         Cancel
                       </button>
@@ -363,15 +368,90 @@ const Admin = () => {
           )}
 
           {selectedSection === 'users' && (
-            <div className="bg-white rounded-lg">
-              <h2 className="text-xl font-semibold mb-4">View Users</h2>
+            <div className="bg-white dark:bg-gray-800 rounded-lg transition-colors">
+              <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">View Users</h2>
+
+              {error && (
+                <div className="mb-4 bg-red-50 border-l-4 border-red-400 p-4">
+                  <div className="flex items-start justify-between">
+                    <div className="flex">
+                      <AlertCircle className="h-5 w-5 text-red-400 mr-2" />
+                      <p className="text-sm text-red-700">{error}</p>
+                    </div>
+                    <button
+                      onClick={() => setError(null)}
+                      className="text-red-400 hover:text-red-600"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <form onSubmit={handleViewUsers} className="space-y-4 mb-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Admin Username</label>
+                    <input
+                      type="text"
+                      placeholder="Enter admin username"
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-300"
+                      value={viewUsersAdminUsername}
+                      onChange={(e) => setViewUsersAdminUsername(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Admin Password</label>
+                    <div className="relative">
+                      <input
+                        type={showViewUsersAdminPassword ? "text" : "password"}
+                        placeholder="Enter admin password"
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 pr-10 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-300"
+                        value={viewUsersAdminPassword}
+                        onChange={(e) => setViewUsersAdminPassword(e.target.value)}
+                        required
+                      />
+                      <button
+                        type="button"
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                        onClick={() => setShowViewUsersAdminPassword(!showViewUsersAdminPassword)}
+                      >
+                        {showViewUsersAdminPassword ? (
+                          <EyeOff className="h-5 w-5 text-gray-400" />
+                        ) : (
+                          <Eye className="h-5 w-5 text-gray-400" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                      Loading Users...
+                    </>
+                  ) : (
+                    <>
+                      <Users className="h-5 w-5 mr-2" />
+                      View Users
+                    </>
+                  )}
+                </button>
+              </form>
+
               <div className="space-y-4">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
                   <input
                     type="text"
                     placeholder="Search users..."
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-300"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                   />
@@ -379,43 +459,52 @@ const Admin = () => {
 
                 {error && (
                   <div className="bg-red-50 border-l-4 border-red-400 p-4">
-                    <div className="flex">
-                      <AlertCircle className="h-5 w-5 text-red-400 mr-2" />
-                      <p className="text-sm text-red-700">{error}</p>
+                    <div className="flex items-start justify-between">
+                      <div className="flex">
+                        <AlertCircle className="h-5 w-5 text-red-400 mr-2" />
+                        <p className="text-sm text-red-700">{error}</p>
+                      </div>
+                      <button
+                        onClick={() => setError(null)}
+                        className="text-red-400 hover:text-red-600"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
                     </div>
                   </div>
                 )}
 
                 {isLoading ? (
-                  <div className="flex justify-center items-center py-8">
-                    <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
-                  </div>
+                  <AdminSkeleton />
                 ) : (
                   <div className="overflow-x-auto">
                     <div className="inline-block min-w-full align-middle">
-                      <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
+                      <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead className="bg-gray-50 dark:bg-gray-700">
                           <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                               Username
                             </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Password Hash
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                              Role
                             </th>
                           </tr>
                         </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
+                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                           {filteredUsers.map((user, index) => (
-                            <tr key={index} className="hover:bg-gray-50">
+                            <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
                               <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-sm font-medium text-gray-900">
+                                <div className="text-sm font-medium text-gray-900 dark:text-white">
                                   {user.username}
                                 </div>
                               </td>
-                              <td className="px-6 py-4">
-                                <div className="text-sm text-gray-500 font-mono break-all">
-                                  {user.password}
-                                </div>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${user.role === 'admin'
+                                  ? 'bg-purple-100 text-purple-800'
+                                  : 'bg-blue-100 text-blue-800'
+                                  }`}>
+                                  {user.role}
+                                </span>
                               </td>
                             </tr>
                           ))}
@@ -435,46 +524,97 @@ const Admin = () => {
           )}
 
           {selectedSection === 'password' && (
-            <div className="bg-white rounded-lg">
-              <h2 className="text-xl font-semibold mb-4">Change User Password</h2>
-              
+            <div className="bg-white dark:bg-gray-800 rounded-lg transition-colors">
+              <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Change User Password</h2>
+
               {error && (
                 <div className="mb-4 bg-red-50 border-l-4 border-red-400 p-4">
-                  <div className="flex">
-                    <AlertCircle className="h-5 w-5 text-red-400 mr-2" />
-                    <p className="text-sm text-red-700">{error}</p>
+                  <div className="flex items-start justify-between">
+                    <div className="flex">
+                      <AlertCircle className="h-5 w-5 text-red-400 mr-2" />
+                      <p className="text-sm text-red-700">{error}</p>
+                    </div>
+                    <button
+                      onClick={() => setError(null)}
+                      className="text-red-400 hover:text-red-600"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
                   </div>
                 </div>
               )}
 
               {successMessage && (
                 <div className="mb-4 bg-green-50 border-l-4 border-green-400 p-4">
-                  <div className="flex">
-                    <CheckCircle className="h-5 w-5 text-green-400 mr-2" />
-                    <p className="text-sm text-green-700">{successMessage}</p>
+                  <div className="flex items-start justify-between">
+                    <div className="flex">
+                      <CheckCircle className="h-5 w-5 text-green-400 mr-2" />
+                      <p className="text-sm text-green-700">{successMessage}</p>
+                    </div>
+                    <button
+                      onClick={() => setSuccessMessage(null)}
+                      className="text-green-400 hover:text-green-600"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
                   </div>
                 </div>
               )}
 
               <form onSubmit={handlePasswordChange} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Username to Update</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Admin Username</label>
+                  <input
+                    type="text"
+                    placeholder="Enter admin username"
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-300"
+                    value={passwordForm.adminUsername}
+                    onChange={(e) => setPasswordForm(prev => ({ ...prev, adminUsername: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Admin Password</label>
+                  <div className="relative">
+                    <input
+                      type={showAdminPassword ? "text" : "password"}
+                      placeholder="Enter admin password"
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 pr-10 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-300"
+                      value={passwordForm.adminPassword}
+                      onChange={(e) => setPasswordForm(prev => ({ ...prev, adminPassword: e.target.value }))}
+                      required
+                    />
+                    <button
+                      type="button"
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                      onClick={() => setShowAdminPassword(!showAdminPassword)}
+                    >
+                      {showAdminPassword ? (
+                        <EyeOff className="h-5 w-5 text-gray-400" />
+                      ) : (
+                        <Eye className="h-5 w-5 text-gray-400" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Username to Update</label>
                   <input
                     type="text"
                     placeholder="Enter username"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-300"
                     value={passwordForm.username}
                     onChange={(e) => setPasswordForm(prev => ({ ...prev, username: e.target.value }))}
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">New Password</label>
                   <div className="relative">
                     <input
                       type={showNewPassword ? "text" : "password"}
                       placeholder="Enter new password"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 pr-10"
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 pr-10 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-300"
                       value={passwordForm.newPassword}
                       onChange={(e) => setPasswordForm(prev => ({ ...prev, newPassword: e.target.value }))}
                       required
@@ -494,12 +634,12 @@ const Admin = () => {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Confirm Password</label>
                   <div className="relative">
                     <input
                       type={showConfirmPassword ? "text" : "password"}
                       placeholder="Confirm new password"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 pr-10"
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 pr-10 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-300"
                       value={passwordForm.confirmPassword}
                       onChange={(e) => setPasswordForm(prev => ({ ...prev, confirmPassword: e.target.value }))}
                       required
@@ -520,9 +660,8 @@ const Admin = () => {
                 <button
                   type="submit"
                   disabled={isChangingPassword}
-                  className={`w-full bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 flex items-center justify-center ${
-                    isChangingPassword ? 'opacity-75 cursor-not-allowed' : ''
-                  }`}
+                  className={`w-full bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 flex items-center justify-center ${isChangingPassword ? 'opacity-75 cursor-not-allowed' : ''
+                    }`}
                 >
                   {isChangingPassword ? (
                     <Loader2 className="h-5 w-5 mr-2 animate-spin" />
@@ -535,180 +674,78 @@ const Admin = () => {
             </div>
           )}
 
-          {selectedSection === 'watch' && (
-            <div className="bg-white rounded-lg">
-              <h2 className="text-xl font-semibold mb-4">Watch Transaction</h2>
-              
-              {error && (
-                <div className="mb-4 bg-red-50 border-l-4 border-red-400 p-4">
-                  <div className="flex">
-                    <AlertCircle className="h-5 w-5 text-red-400 mr-2" />
-                    <p className="text-sm text-red-700">{error}</p>
-                  </div>
-                </div>
-              )}
 
-              {successMessage && (
-                <div className="mb-4 bg-green-50 border-l-4 border-green-400 p-4">
-                  <div className="flex">
-                    <CheckCircle className="h-5 w-5 text-green-400 mr-2" />
-                    <p className="text-sm text-green-700">{successMessage}</p>
-                  </div>
-                </div>
-              )}
-
-              <div className="space-y-4">
-                <button
-                  onClick={() => setShowConfirmDialog(true)}
-                  className="w-full bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 flex items-center justify-center"
-                >
-                  <Eye className="h-5 w-5 mr-2" />
-                  View All Stock Transactions
-                </button>
-
-                {isLoadingTransactions ? (
-                  <div className="flex justify-center items-center py-8">
-                    <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
-                  </div>
-                ) : transactions.length > 0 ? (
-                  <div className="space-y-4">
-                    <h3 className="font-medium text-gray-900">Transaction History</h3>
-                    <div className="space-y-3">
-                      {transactions.map((transaction, index) => (
-                        <div key={index} className="border rounded-lg p-4 hover:bg-gray-50">
-                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                            <div className="flex items-start space-x-3">
-                              {transaction.operation_type === 'SubtractStockQuantity' ? (
-                                <ArrowDownRight className="h-5 w-5 text-red-500 flex-shrink-0" />
-                              ) : (
-                                <ArrowUpRight className="h-5 w-5 text-green-500 flex-shrink-0" />
-                              )}
-                              <div>
-                                <p className="text-sm font-medium text-gray-900">
-                                  {transaction.operation_type}
-                                </p>
-                                <p className="text-xs text-gray-500">
-                                  ID: {transaction.transaction_id}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex items-center text-sm text-gray-500">
-                              <Clock className="h-4 w-4 mr-1" />
-                              {transaction.timestamp}
-                            </div>
-                          </div>
-                          <div className="mt-2 bg-gray-50 rounded-md p-3">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
-                              <div>
-                                <span className="text-gray-500">Item ID:</span>
-                                <span className="ml-2 font-medium">{transaction.details.item_id}</span>
-                              </div>
-                              <div>
-                                <span className="text-gray-500">User:</span>
-                                <span className="ml-2 font-medium">{transaction.details.username}</span>
-                              </div>
-                              {Object.entries(transaction.details).map(([key, value]) => {
-                                if (key !== 'item_id' && key !== 'username') {
-                                  return (
-                                    <div key={key}>
-                                      <span className="text-gray-500">{key}:</span>
-                                      <span className="ml-2 font-medium">
-                                        {typeof value === 'object' ? JSON.stringify(value) : value}
-                                      </span>
-                                    </div>
-                                  );
-                                }
-                                return null;
-                              })}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-gray-500">
-                    No transactions to display. Click the button above to load transactions.
-                  </div>
-                )}
-              </div>
-
-              {showConfirmDialog && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                  <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-                    <h3 className="text-lg font-semibold mb-4">Confirm Action</h3>
-                    <p className="text-gray-600 mb-6">
-                      Are you sure you want to view all stock transactions?
-                    </p>
-                    <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-3">
-                      <button
-                        onClick={() => setShowConfirmDialog(false)}
-                        className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 w-full sm:w-auto"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={handleWatchTransactions}
-                        disabled={isLoadingTransactions}
-                        className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 flex items-center justify-center w-full sm:w-auto"
-                      >
-                        {isLoadingTransactions ? (
-                          <div className="flex items-center">
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            Loading...
-                          </div>
-                        ) : (
-                          'Confirm'
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
 
           {selectedSection === 'create' && (
-            <div className="bg-white rounded-lg">
-              <h2 className="text-xl font-semibold mb-4">Create New User</h2>
-              
+            <div className="bg-white dark:bg-gray-800 rounded-lg transition-colors">
+              <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Create New User</h2>
+
               {error && (
                 <div className="mb-4 bg-red-50 border-l-4 border-red-400 p-4">
-                  <div className="flex">
-                    <AlertCircle className="h-5 w-5 text-red-400 mr-2" />
-                    <p className="text-sm text-red-700">{error}</p>
+                  <div className="flex items-start justify-between">
+                    <div className="flex">
+                      <AlertCircle className="h-5 w-5 text-red-400 mr-2" />
+                      <p className="text-sm text-red-700">{error}</p>
+                    </div>
+                    <button
+                      onClick={() => setError(null)}
+                      className="text-red-400 hover:text-red-600"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
                   </div>
                 </div>
               )}
 
               {successMessage && (
                 <div className="mb-4 bg-green-50 border-l-4 border-green-400 p-4">
-                  <div className="flex">
-                    <CheckCircle className="h-5 w-5 text-green-400 mr-2" />
-                    <p className="text-sm text-green-700">{successMessage}</p>
+                  <div className="flex items-start justify-between">
+                    <div className="flex">
+                      <CheckCircle className="h-5 w-5 text-green-400 mr-2" />
+                      <p className="text-sm text-green-700">{successMessage}</p>
+                    </div>
+                    <button
+                      onClick={() => setSuccessMessage(null)}
+                      className="text-green-400 hover:text-green-600"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
                   </div>
                 </div>
               )}
 
               <form onSubmit={handleCreateUser} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Username</label>
                   <input
                     type="text"
                     placeholder="Enter username"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-300"
                     value={createUserForm.username}
                     onChange={(e) => setCreateUserForm(prev => ({ ...prev, username: e.target.value }))}
                     required
                   />
                 </div>
+
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Role</label>
+                  <select
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    value={createUserForm.role}
+                    onChange={(e) => setCreateUserForm(prev => ({ ...prev, role: e.target.value }))}
+                    required
+                  >
+                    <option value="user">User</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Password</label>
                   <div className="relative">
                     <input
                       type={showCreatePassword ? "text" : "password"}
                       placeholder="Enter password"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 pr-10"
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 pr-10 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-300"
                       value={createUserForm.password}
                       onChange={(e) => setCreateUserForm(prev => ({ ...prev, password: e.target.value }))}
                       required
@@ -727,14 +764,14 @@ const Admin = () => {
                     </button>
                   </div>
                 </div>
-                
+
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Confirm Password</label>
                   <div className="relative">
                     <input
                       type={showCreateConfirmPassword ? "text" : "password"}
                       placeholder="Confirm password"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 pr-10"
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 pr-10 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-300"
                       value={createUserForm.confirmPassword}
                       onChange={(e) => setCreateUserForm(prev => ({ ...prev, confirmPassword: e.target.value }))}
                       required
@@ -755,9 +792,8 @@ const Admin = () => {
                 <button
                   type="submit"
                   disabled={isCreatingUser}
-                  className={`w-full bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 flex items-center justify-center ${
-                    isCreatingUser ? 'opacity-75 cursor-not-allowed' : ''
-                  }`}
+                  className={`w-full bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 flex items-center justify-center ${isCreatingUser ? 'opacity-75 cursor-not-allowed' : ''
+                    }`}
                 >
                   {isCreatingUser ? (
                     <Loader2 className="h-5 w-5 mr-2 animate-spin" />

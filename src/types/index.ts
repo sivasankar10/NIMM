@@ -7,11 +7,19 @@ export interface RawMaterial {
   available: number;
   minStockLimit?: number;
   defectiveQuantity: number;
+  totalQuantity?: number;
+  gst?: number;
+  gst_amount?: number;
+  total_cost?: number;
+  updated_at?: string;
+  created_at?: string;
+  group_id?: string;
 }
 
 export interface ProductMaterial {
   materialName: string;
   quantity: number;
+  groupChain: string[];
 }
 
 export interface ProductionCostBreakdown {
@@ -29,6 +37,16 @@ export interface Product {
   stockNeeded: { [key: string]: number };
   createdAt: string;
   materials: ProductMaterial[];
+  wastageAmount: number;
+  wastagePercent: number;
+  labourCost: number;
+  transportCost?: number;
+  transport_cost?: number;
+  otherCost: number;
+  totalCost: number;
+  wastage?: number;
+  laborCost?: number;
+  groupChain?: { [key: string]: string };
 }
 
 export interface StockAlert {
@@ -63,13 +81,26 @@ export interface Report {
   };
 }
 
+export interface InsufficientMaterial {
+  material_id: string;
+  material_name: string;
+  required_per_unit: number;
+  available_stock: number;
+  shortage: number;
+}
+
 export interface ProductionResponse {
   message: string;
-  push_id: string;
-  product_id: string;
-  quantity_produced: number;
-  production_cost_per_unit: number;
-  total_production_cost: number;
+  push_id?: string;
+  product_id?: string;
+  quantity_produced?: number;
+  production_cost_per_unit?: number;
+  total_production_cost?: number;
+  can_produce?: boolean;
+  max_produce?: number;
+  reason?: string;
+  insufficient_materials?: InsufficientMaterial[];
+  status?: string;
 }
 
 export interface StockSummary {
@@ -104,11 +135,52 @@ export interface Transaction {
   timestamp: string;
 }
 
+export interface DailyReportItem {
+  description: string;
+  rate: number;
+  opening_stock_qty: number;
+  opening_stock_amount: number;
+  inward_qty: number;
+  inward_amount: number;
+  consumption_qty: number;
+  consumption_amount: number;
+  balance_qty: number;
+  balance_amount: number;
+  group_id: string | null;
+  group_name: string;
+}
+
+export interface DailyReportGroupSummary {
+  description: string;
+  opening_stock_qty: number;
+  opening_stock_amount: number;
+  inward_qty: number;
+  inward_amount: number;
+  consumption_qty: number;
+  consumption_amount: number;
+  balance_qty: number;
+  balance_amount: number;
+}
+
+export interface DailyReportTransaction {
+  transaction_id: string;
+  date: string;
+  operation: string;
+  details: Record<string, any>;
+  timestamp: string;
+}
+
 export interface DailyReportData {
-  report_date: string;
-  stock_summary: StockSummary;
-  transactions_by_operation: {
-    [key: string]: Transaction[];
+  report_period: {
+    start_date: string;
+    end_date: string;
+  };
+  items: DailyReportItem[];
+  group_summary: DailyReportGroupSummary[];
+  transactions: {
+    [date: string]: {
+      operations: DailyReportTransaction[];
+    };
   };
 }
 

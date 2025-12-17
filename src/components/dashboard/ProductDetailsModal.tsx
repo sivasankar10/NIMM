@@ -1,190 +1,159 @@
-import React from 'react';
-import { X, Package, DollarSign, Clock, ArrowUpRight, ArrowDownRight, Boxes, AlertTriangle } from 'lucide-react';
-import { Product } from '../../types';
+import React, { memo, useMemo, useCallback, Suspense } from 'react';
 import { format } from 'date-fns';
 
-interface ProductDetailsModalProps {
-  product: Product;
+// Lazy-load heavy lucide icons
+const X = React.lazy(() => import('lucide-react').then(m => ({ default: m.X })));
+const Package = React.lazy(() => import('lucide-react').then(m => ({ default: m.Package })));
+const DollarSign = React.lazy(() => import('lucide-react').then(m => ({ default: m.DollarSign })));
+const Boxes = React.lazy(() => import('lucide-react').then(m => ({ default: m.Boxes })));
+const ArrowUpRight = React.lazy(() => import('lucide-react').then(m => ({ default: m.ArrowUpRight })));
+const ArrowDownRight = React.lazy(() => import('lucide-react').then(m => ({ default: m.ArrowDownRight })));
+const AlertTriangle = React.lazy(() => import('lucide-react').then(m => ({ default: m.AlertTriangle })));
+
+interface Props {
+  product: any;
   onClose: () => void;
 }
 
-export const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({ product, onClose }) => {
-  // Helper function to safely format numbers
-  const formatCurrency = (value: any): string => {
-    const num = Number(value);
-    return isNaN(num) ? '0.00' : num.toFixed(2);
-  };
+const ProductDetailsModalComponent = ({ product, onClose }: Props) => {
 
-  // Close modal when clicking outside
-  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (e.target === e.currentTarget) {
-      onClose();
-    }
-  };
+  const costBreakdown = useMemo(
+    () => Object.entries(product.productionCostBreakdown || {}),
+    [product.productionCostBreakdown]
+  );
 
-  // Handle ESC key press
-  React.useEffect(() => {
-    const handleEscKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
+  const stockNeeded = useMemo(
+    () => Object.entries(product.stockNeeded || {}),
+    [product.stockNeeded]
+  );
 
-    window.addEventListener('keydown', handleEscKey);
-    return () => window.removeEventListener('keydown', handleEscKey);
-  }, [onClose]);
-
-  // Prevent body scrolling when modal is open
-  React.useEffect(() => {
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = 'unset';
-    };
+  const formatCurrency = useCallback((value: number) => {
+    const v = Number(value);
+    return isNaN(v) ? '0.00' : v.toFixed(2);
   }, []);
 
+  const createdDate = useMemo(
+    () => format(new Date(product.createdAt), 'PPp'),
+    [product.createdAt]
+  );
+
   return (
-    <div 
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 backdrop-blur-sm overflow-y-auto"
-      onClick={handleBackdropClick}
-    >
+    <div className="fixed inset-0 bg-black/40 dark:bg-black/60 flex items-start justify-center z-50 overflow-y-auto">
       <div className="relative min-h-screen flex items-center justify-center py-8">
-        <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full mx-4">
-          {/* Header */}
-          <div className="sticky top-0 bg-white border-b z-10 px-6 py-4 rounded-t-xl">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-4xl w-full mx-4 will-change-transform">
+
+          {/* HEADER */}
+          <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 z-10">
             <div className="flex justify-between items-start">
-              <div className="pr-8">
-                <h2 className="text-2xl font-bold text-gray-900 flex items-center flex-wrap gap-2">
+              <div>
+                <h2 className="text-2xl font-bold flex gap-2 text-gray-900 dark:text-white">
                   {product.name}
-                  <span className="px-3 py-1 bg-indigo-100 text-indigo-700 text-sm font-medium rounded-full">
+                  <span className="bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 px-3 py-1 text-sm font-medium rounded-full">
                     ID: {product.id}
                   </span>
                 </h2>
-                <p className="text-sm text-gray-500 mt-1">
-                  Created on {format(new Date(product.createdAt), 'PPp')}
-                </p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Created: {createdDate}</p>
               </div>
-              <button
-                onClick={onClose}
-                className="text-gray-500 hover:text-gray-700 p-2 hover:bg-gray-100 rounded-full transition-colors flex-shrink-0"
-                title="Press ESC to close"
-              >
-                <X className="h-6 w-6" />
-              </button>
+
+              <Suspense fallback={<div className="p-2">X</div>}>
+                <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors">
+                  <X className="h-6 w-6 text-gray-700 dark:text-gray-300" />
+                </button>
+              </Suspense>
             </div>
           </div>
 
           <div className="p-6 space-y-6">
-            {/* Quick Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-blue-50 rounded-lg p-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-blue-700 font-medium">Current Stock</h3>
-                  <Boxes className="h-5 w-5 text-blue-700" />
-                </div>
-                <p className="text-2xl font-bold text-blue-900 mt-2">{product.inventory} units</p>
-              </div>
-              <div className="bg-green-50 rounded-lg p-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-green-700 font-medium">Max Production</h3>
-                  <ArrowUpRight className="h-5 w-5 text-green-700" />
-                </div>
-                <p className="text-2xl font-bold text-green-900 mt-2">{product.maxProduce} units</p>
-              </div>
-              <div className="bg-purple-50 rounded-lg p-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-purple-700 font-medium">Production Cost</h3>
-                  <DollarSign className="h-5 w-5 text-purple-700" />
-                </div>
-                <p className="text-2xl font-bold text-purple-900 mt-2">₹{formatCurrency(product.productionCostTotal)}</p>
-              </div>
-            </div>
 
-            {/* Production Details */}
+            {/* MAIN GRID */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-gray-50 rounded-xl p-6">
-                <div className="flex items-center space-x-2 mb-4">
-                  <Package className="h-6 w-6 text-indigo-600" />
-                  <h3 className="text-lg font-semibold text-gray-900">Production Details</h3>
-                </div>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center p-3 bg-white rounded-lg shadow-sm">
-                    <span className="text-gray-600">Max Production</span>
-                    <span className="font-semibold text-indigo-600">{product.maxProduce} units</span>
+
+              {/* LEFT BLOCK */}
+              <div className="bg-gray-50 dark:bg-gray-700/50 p-6 rounded-xl space-y-4">
+                <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                  Production Details
+                </h3>
+
+                <div className="space-y-2">
+                  <div className="p-3 bg-white dark:bg-gray-800 shadow-sm rounded-lg flex justify-between">
+                    <span className="text-gray-700 dark:text-gray-300">Max Produce</span>
+                    <span className="font-semibold text-gray-900 dark:text-white">{product.maxProduce} units</span>
                   </div>
-                  <div className="flex justify-between items-center p-3 bg-white rounded-lg shadow-sm">
-                    <span className="text-gray-600">Original Max</span>
-                    <span className="font-semibold text-indigo-600">{product.originalMaxProduce} units</span>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-white rounded-lg shadow-sm">
-                    <span className="text-gray-600">Current Inventory</span>
-                    <span className="font-semibold text-indigo-600">{product.inventory} units</span>
+
+                  <div className="p-3 bg-white dark:bg-gray-800 shadow-sm rounded-lg flex justify-between">
+                    <span className="text-gray-700 dark:text-gray-300">Inventory</span>
+                    <span className="font-semibold text-gray-900 dark:text-white">{product.inventory ?? 0} units</span>
                   </div>
                 </div>
               </div>
 
-              <div className="bg-gray-50 rounded-xl p-6">
-                <div className="flex items-center space-x-2 mb-4">
-                  <DollarSign className="h-6 w-6 text-green-600" />
-                  <h3 className="text-lg font-semibold text-gray-900">Cost Breakdown</h3>
-                </div>
-                <div className="space-y-4">
-                  <div className="p-4 bg-green-50 rounded-lg">
-                    <div className="flex justify-between items-center">
-                      <span className="font-medium text-green-800">Total Production Cost</span>
-                      <span className="text-xl font-bold text-green-700">₹{formatCurrency(product.productionCostTotal)}</span>
-                    </div>
+              {/* RIGHT BLOCK */}
+              <div className="bg-gray-50 dark:bg-gray-700/50 p-6 rounded-xl space-y-4">
+                <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                  Cost Summary
+                </h3>
+
+                <div className="space-y-2">
+                  <div className="p-3 bg-white dark:bg-gray-800 shadow-sm rounded-lg flex justify-between">
+                    <span className="text-gray-700 dark:text-gray-300">Production Cost</span>
+                    <span className="font-semibold text-gray-900 dark:text-white">₹{formatCurrency(product.productionCostTotal)}</span>
                   </div>
-                  <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2 scrollbar-thin">
-                    {Object.entries(product.productionCostBreakdown).map(([material, cost]) => (
-                      <div key={material} className="flex justify-between items-center p-3 bg-white rounded-lg shadow-sm">
-                        <span className="text-gray-600 break-words pr-4">{material}</span>
-                        <span className="font-medium text-gray-900 whitespace-nowrap">₹{formatCurrency(cost)}</span>
-                      </div>
-                    ))}
+
+                  <div className="p-3 bg-white dark:bg-gray-800 shadow-sm rounded-lg flex justify-between">
+                    <span className="text-gray-700 dark:text-gray-300">Labour Cost</span>
+                    <span className="font-semibold text-gray-900 dark:text-white">₹{formatCurrency(product.laborCost)}</span>
+                  </div>
+
+                  <div className="p-3 bg-white dark:bg-gray-800 shadow-sm rounded-lg flex justify-between">
+                    <span className="text-gray-700 dark:text-gray-300">Total Cost</span>
+                    <span className="font-bold text-green-700 dark:text-green-400">₹{formatCurrency(product.totalCost)}</span>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Required Materials */}
-            <div className="bg-gray-50 rounded-xl p-6">
-              <div className="flex items-center space-x-2 mb-6">
-                <Package className="h-6 w-6 text-blue-600" />
-                <h3 className="text-lg font-semibold text-gray-900">Required Materials</h3>
+            {/* BREAKDOWN */}
+            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-6">
+              <h3 className="font-semibold text-gray-900 dark:text-white">Material Cost Breakdown</h3>
+              <div className="max-h-[300px] overflow-y-auto mt-4 space-y-2 scrollbar-thin">
+                {costBreakdown.map(([material, cost]) => (
+                  <div key={material} className="p-3 bg-white dark:bg-gray-800 rounded-lg shadow-sm flex justify-between">
+                    <span className="text-gray-700 dark:text-gray-300">{material}</span>
+                    <span className="font-medium text-gray-900 dark:text-white">₹{formatCurrency(cost)}</span>
+                  </div>
+                ))}
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[400px] overflow-y-auto pr-2 scrollbar-thin">
-                {Object.entries(product.stockNeeded).map(([material, quantity]) => (
-                  <div key={material} className="bg-white p-4 rounded-lg shadow-sm hover:shadow-md transition-shadow">
-                    <h4 className="font-medium text-gray-900 mb-2 break-words">{material}</h4>
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-600">Required:</span>
-                      <span className="font-semibold text-indigo-600">{quantity} units</span>
+            </div>
+
+            {/* MATERIALS */}
+            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-6">
+              <h3 className="font-semibold text-gray-900 dark:text-white">Required Materials</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[300px] overflow-y-auto scrollbar-thin mt-4">
+                {stockNeeded.map(([item, qty]) => (
+                  <div key={item} className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm">
+                    <h4 className="font-medium mb-2 text-gray-900 dark:text-white">{item}</h4>
+                    <div className="flex justify-between">
+                      <span className="text-gray-700 dark:text-gray-300">Required:</span>
+                      <span className="font-semibold text-gray-900 dark:text-white">{qty} units</span>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
+
           </div>
 
-          {/* Footer */}
-          <div className="sticky bottom-0 bg-gray-50 px-6 py-4 border-t rounded-b-xl">
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={onClose}
-                className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={onClose}
-                className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-              >
-                Close
-              </button>
-            </div>
+          {/* FOOTER */}
+          <div className="sticky bottom-0 bg-gray-50 dark:bg-gray-700/50 px-6 py-4 border-t border-gray-200 dark:border-gray-700 rounded-b-xl flex justify-end gap-3">
+            <button onClick={onClose} className="px-6 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-gray-900 dark:text-white rounded-lg transition-colors">
+              Close
+            </button>
           </div>
+
         </div>
       </div>
     </div>
   );
 };
+
+export const ProductDetailsModal = memo(ProductDetailsModalComponent);

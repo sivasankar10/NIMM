@@ -15,4 +15,33 @@ export interface RawMaterial {
   original_max_produce?: number;
   username?: string;
   product_id?: string;
+  totalQuantity?: number;
+  gst?: number;
+  gst_amount?: number;
+  total_cost?: number;
+  updated_at?: string;
+  group_id?: string;
+}
+
+export interface Product {
+  id: string;
+  name: string;
+  inventory?: number;
+  maxProduce: number;
+  originalMaxProduce: number;
+  productionCostTotal: number;
+  productionCostBreakdown: Record<string, string | number>;
+  stockNeeded: Record<string, string | number>;
+  createdAt: string;
+  materials: Array<{
+    materialName: string;
+    quantity: number;
+  }>;
+  wastage: number;
+  wastageAmount: number;
+  laborCost: number;
+  totalCost: number;
+  groupChain: Record<string, string>;
+  transportCost?: number;
+  otherCost?: number;
 } 

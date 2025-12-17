@@ -2,8 +2,10 @@ import React from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import Dashboard from '../pages/Dashboard';
-import { Inventory } from '../pages/Inventory';
+import GRN from '../pages/GRN';
+import Inventory from '../pages/Inventory';
 import Production from '../pages/Production';
+import Costing from '../pages/Costing';
 import Dispatched from '../pages/Dispatched';
 import Reports from '../pages/Reports';
 import DailyReport from '../pages/reports/DailyReport';
@@ -15,6 +17,16 @@ import MonthlyConsumption from '../pages/reports/MonthlyConsumption';
 import Login from '../pages/Login';
 import Admin from '../pages/Admin';
 import ProtectedRoute from '../components/ProtectedRoute';
+import AdminRoute from '../components/AdminRoute';
+import SignUp from '../pages/SignUp';
+import DispatchedDaily from '../pages/DispatchedDaily';
+import DispatchedWeekly from '../pages/DispatchedWeekly';
+import DispatchedMonthly from '../pages/DispatchedMonthly';
+import DailyInward from '../pages/reports/DailyInward';
+import WeeklyInward from '../pages/reports/WeeklyInward';
+import MonthlyInward from '../pages/reports/MonthlyInward';
+import MonthlyInwardGrid from '../pages/reports/MonthlyInwardGrid';
+import MonthlyOutwardGrid from '../pages/reports/MonthlyOutwardGrid';
 
 export const router = createBrowserRouter([
   {
@@ -26,11 +38,15 @@ export const router = createBrowserRouter([
     element: <Login />,
   },
   {
+    path: '/signup',
+    element: <SignUp />,
+  },
+  {
     path: '/admin',
     element: (
-      <ProtectedRoute requireAdmin>
+      <AdminRoute>
         <Layout />
-      </ProtectedRoute>
+      </AdminRoute>
     ),
     children: [
       {
@@ -52,6 +68,14 @@ export const router = createBrowserRouter([
         element: <Dashboard />,
       },
       {
+        path: 'grn',
+        element: <GRN />,
+      },
+      {
+        path: 'costing',
+        element: <Costing />,
+      },
+      {
         path: 'inventory',
         element: <Inventory />,
       },
@@ -62,6 +86,20 @@ export const router = createBrowserRouter([
       {
         path: 'dispatched',
         element: <Dispatched />,
+        children: [
+          {
+            path: 'daily',
+            element: <DispatchedDaily />,
+          },
+          {
+            path: 'weekly',
+            element: <DispatchedWeekly />,
+          },
+          {
+            path: 'monthly',
+            element: <DispatchedMonthly />,
+          },
+        ],
       },
       {
         path: 'reports',
@@ -93,7 +131,27 @@ export const router = createBrowserRouter([
           {
             path: 'consumption/monthly',
             element: <MonthlyConsumption />,
-          }
+          },
+          {
+            path: 'inward/daily',
+            element: <DailyInward />,
+          },
+          {
+            path: 'inward/weekly',
+            element: <WeeklyInward />,
+          },
+          {
+            path: 'inward/monthly',
+            element: <MonthlyInward />,
+          },
+          {
+            path: 'inward-outward/inward',
+            element: <MonthlyInwardGrid />,
+          },
+          {
+            path: 'inward-outward/outward',
+            element: <MonthlyOutwardGrid />,
+          },
         ],
       },
     ],

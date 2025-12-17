@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { authService } from '../utils/authService';
 
 interface AuthUser {
   username: string;
@@ -23,7 +24,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isAdmin: false
   });
 
+  useEffect(() => {
+    // Initialize state from authService on mount
+    const token = authService.getToken();
+    const role = authService.getRole();
+    const username = authService.getUsername();
+
+    if (token && username) {
+      setUser({
+        username,
+        isAuthenticated: true,
+        isAdmin: role === 'admin'
+      });
+    }
+  }, []);
+
   const login = (username: string, isAdmin: boolean) => {
+    // This function is mainly for updating the context state
+    // The actual login API call happens in Login.tsx via authService
     setUser({
       username,
       isAuthenticated: true,
@@ -32,6 +50,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
+    authService.logout();
     setUser({
       username: '',
       isAuthenticated: false,
@@ -40,7 +59,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ 
+    <AuthContext.Provider value={{
       user,
       isAuthenticated: user.isAuthenticated,
       isAdmin: user.isAdmin,
